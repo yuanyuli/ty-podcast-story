@@ -1,6 +1,6 @@
 """角色相关的Pydantic模型"""
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 
 
@@ -19,6 +19,12 @@ class CharacterBase(BaseModel):
     organization_purpose: Optional[str] = Field(None, description="组织目的")
     organization_members: Optional[str] = Field(None, description="组织成员(JSON)")
     traits: Optional[str] = Field(None, description="特征标签(JSON)")
+    # 音色配置（播客模式）
+    voice_id: Optional[str] = None
+    voice_speed: Optional[float] = 1.0
+    voice_pitch: Optional[float] = 0.0
+    voice_sample: Optional[str] = None
+    catchphrase: Optional[str] = None
 
 
 class CharacterCreate(BaseModel):
@@ -49,6 +55,13 @@ class CharacterCreate(BaseModel):
     main_career_stage: Optional[int] = Field(None, description="主职业阶段")
     sub_careers: Optional[str] = Field(None, description="副职业列表JSON字符串")
 
+    # 音色配置（播客模式）
+    voice_id: Optional[str] = None
+    voice_speed: Optional[float] = 1.0
+    voice_pitch: Optional[float] = 0.0
+    voice_sample: Optional[str] = None
+    catchphrase: Optional[str] = None
+
 
 class CharacterUpdate(BaseModel):
     """更新角色的请求模型"""
@@ -75,6 +88,13 @@ class CharacterUpdate(BaseModel):
     main_career_id: Optional[str] = Field(None, description="主职业ID")
     main_career_stage: Optional[int] = Field(None, description="主职业阶段")
     sub_careers: Optional[str] = Field(None, description="副职业列表JSON字符串")
+
+    # 音色配置（播客模式）
+    voice_id: Optional[str] = None
+    voice_speed: Optional[float] = None
+    voice_pitch: Optional[float] = None
+    voice_sample: Optional[str] = None
+    catchphrase: Optional[str] = None
 
 
 class CharacterResponse(CharacterBase):

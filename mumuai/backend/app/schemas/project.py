@@ -15,6 +15,7 @@ class ProjectBase(BaseModel):
         default="one-to-many",
         description="大纲章节模式: one-to-one(传统模式,1大纲→1章节) 或 one-to-many(细化模式,1大纲→N章节)"
     )
+    content_mode: Optional[str] = Field("novel", description="内容模式: novel(小说) 或 podcast(播客)")
 
 
 class ProjectCreate(ProjectBase):
@@ -56,6 +57,7 @@ class ProjectResponse(ProjectBase):
     narrative_perspective: Optional[str] = None
     character_count: Optional[int] = None
     outline_mode: str  # 显式声明以确保响应中包含
+    content_mode: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     

@@ -107,6 +107,22 @@ class Settings(BaseSettings):
     SESSION_EXPIRE_MINUTES: int = 120  # 会话过期时间（分钟），默认2小时
     SESSION_REFRESH_THRESHOLD_MINUTES: int = 30  # 会话刷新阈值（分钟），剩余时间少于此值时可刷新
     
+    # ComfyUI (TTS 语音生成)
+    comfyui_base_url: str = "http://host.docker.internal:8188"
+    comfyui_timeout: int = 300  # TTS 超时秒数
+
+    # ACE-Step (BGM 音乐生成, 可选)
+    acestep_api_url: Optional[str] = None
+    acestep_timeout: int = 120  # BGM 超时秒数
+
+    # 音频输出
+    audio_output_dir: str = "/app/data/audio"
+    audio_format: str = "mp3"
+    audio_bitrate: str = "128k"
+
+    # BGM 预设目录 (相对于 audio_output_dir)
+    bgm_presets_dir: str = "bgm_presets"
+
     # 提示词工坊配置
     WORKSHOP_MODE: str = "client"  # client: 本地部署实例, server: 云端中央服务器
     WORKSHOP_CLOUD_URL: str = "https://mumuverse.space:1566"  # 云端服务地址

@@ -1,0 +1,8 @@
+# Claude Code
+.claude/
+
+# Superpowers brainstorm artifacts
+.superpowers/
+
+# Docker volumes
+docker-volumes/

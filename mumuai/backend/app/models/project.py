@@ -21,7 +21,8 @@ class Project(Base):
     wizard_status = Column(String(20), default="incomplete", comment="向导完成状态: incomplete/completed")
     wizard_step = Column(Integer, default=0, comment="向导当前步骤: 0-4")
     outline_mode = Column(String(20), nullable=False, default="one-to-many", comment="大纲章节模式: one-to-one(传统模式) 或 one-to-many(细化模式)")
-    
+    content_mode = Column(String(20), default="novel", nullable=False, comment="内容模式: novel(小说) 或 podcast(播客)")
+
     # 世界构建字段
     world_time_period = Column(Text, comment="时间背景")
     world_location = Column(Text, comment="地理位置")
@@ -40,6 +41,10 @@ class Project(Base):
         CheckConstraint(
             "outline_mode IN ('one-to-one', 'one-to-many')",
             name='check_outline_mode'
+        ),
+        CheckConstraint(
+            "content_mode IN ('novel', 'podcast')",
+            name='check_content_mode'
         ),
     )
     

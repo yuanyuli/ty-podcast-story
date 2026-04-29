@@ -1,5 +1,5 @@
 """角色数据模型"""
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, Integer
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, Integer, Float
 from sqlalchemy.sql import func
 from app.database import Base
 import uuid
@@ -45,6 +45,13 @@ class Character(Base):
     main_career_stage = Column(Integer, comment="主职业当前阶段")
     sub_careers = Column(Text, comment="副职业列表(JSON): [{\"career_id\": \"xxx\", \"stage\": 3}, ...]")
     
+    # 音色配置（播客模式）
+    voice_id = Column(String(100), nullable=True, comment="VoxCPM 音色标识")
+    voice_speed = Column(Float, default=1.0, comment="语速")
+    voice_pitch = Column(Float, default=0.0, comment="音高调整")
+    voice_sample = Column(String(500), nullable=True, comment="参考音频路径")
+    catchphrase = Column(String(200), nullable=True, comment="口头禅")
+
     # 其他
     avatar_url = Column(String(500), comment="头像URL")
     traits = Column(Text, comment="特征标签(JSON)")

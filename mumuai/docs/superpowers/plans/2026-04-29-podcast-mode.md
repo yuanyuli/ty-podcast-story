@@ -35,7 +35,7 @@
 | `backend/app/models/character.py` | +voice_id/speed/pitch/sample/catchphrase |
 | `backend/app/models/__init__.py` | +导出新模型 |
 | `backend/app/config.py` | +ComfyUI/ACE-Step/音频输出配置 |
-| `backend/app/services/prompt_service.py` | +6 个播客模板常量 |
+| `backend/app/services/prompt_service.py` | +6 个播客模板常量 + 2 个播客写作风格预设 |
 | `backend/app/schemas/project.py` | +content_mode 到 schemas |
 | `backend/app/schemas/character.py` | +voice 字段到 schemas |
 | `backend/app/api/chapters.py` | +播客模式生成分支 |
@@ -48,6 +48,7 @@
 | `frontend/src/types/index.ts` | +AudioTask/AudioFile/VoiceConfig 类型 |
 | `frontend/src/services/api.ts` | +audioApi 模块 |
 | `frontend/src/pages/Chapters.tsx` | +生成播客按钮 |
+| `frontend/src/components/CharacterCard.tsx` | +音色展示/配置入口 |
 | `frontend/src/App.tsx` | +AudioStudio 路由 |
 
 ---
@@ -563,8 +564,81 @@ git commit -m "feat: add 6 podcast prompt templates (WORLD, OUTLINE, EPISODE_FIR
 ```
 
 ---
+### Task 5b: 添加播客写作风格预设
 
-### Task 6: 播客大纲模式
+**Files:**
+- Create: `backend/alembic/postgres/versions/20260429_YYYY_seed_podcast_styles.py`
+
+- [ ] **Step 1: 创建数据迁移插入两个播客写作风格**
+
+```python
+"""seed podcast writing styles
+
+Revision ID: podcast_styles_001
+Revises: podcast_001
+Create Date: 2026-04-29
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = 'podcast_styles_001'
+down_revision = 'podcast_001'
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    op.execute("""
+        INSERT INTO writing_styles (id, preset_id, name, category, prompt_content, is_system, created_at, updated_at)
+        VALUES
+        (
+            gen_random_uuid(),
+            'podcast_bedtime',
+            '睡前故事风',
+            'podcast',
+            '语速温和、句子简短(单句不超过15字)、多用拟声词和重复句式、每集结尾用"小朋友们，想知道后面发生了什么吗？闭上眼睛，我们明天继续..."',
+            true,
+            now(),
+            now()
+        ),
+        (
+            gen_random_uuid(),
+            'podcast_drama',
+            '历史广播剧风',
+            'podcast',
+            '对话节奏明快、角色性格鲜明、旁白有画面感、适当使用环境音描述、每集结尾设置悬念钩子',
+            true,
+            now(),
+            now()
+        )
+        ON CONFLICT (preset_id) DO NOTHING
+    """)
+
+def downgrade():
+    op.execute("DELETE FROM writing_styles WHERE preset_id IN ('podcast_bedtime', 'podcast_drama')")
+```
+
+- [ ] **Step 2: 创建对应 SQLite 迁移**
+
+在 `backend/alembic/sqlite/versions/` 下创建同名迁移，使用 SQLite 兼容语法（`gen_random_uuid()` 替换为 hex(randomblob(16)) 或应用层 UUID）。
+
+- [ ] **Step 3: 在 prompt_service.py 的 WritingStyleManager 中注册播客分类**
+
+在 `WritingStyleManager` 的类别列表中添加 `'podcast'`：
+
+```python
+CATEGORIES = ['novel', 'podcast', 'general']
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/alembic/ backend/app/services/prompt_service.py
+git commit -m "feat: add podcast writing style presets (bedtime, drama)"
+```
+
+---
+
+---
 
 **Files:**
 - Modify: `backend/app/api/outlines.py`
@@ -659,7 +733,17 @@ def parse_dialogue(text: str) -> List[Dict[str, Any]]:
     matches = re.findall(pattern, text, re.DOTALL)
 
     if not matches:
-        return []
+        # 降级：未匹配【角色名】格式时，整段非空文本归为【旁白】
+        cleaned = text.strip()
+        if not cleaned:
+            return []
+        return [{
+            "order": 1,
+            "speaker": "旁白",
+            "text": cleaned,
+            "emotion": "neutral",
+            "estimated_duration_ms": len(cleaned) * 250
+        }]
 
     segments = []
     for i, (speaker, content) in enumerate(matches):
@@ -731,6 +815,14 @@ def test_parse_dialogue():
 
 def test_empty_text():
     assert parse_dialogue("") == []
+
+def test_fallback_to_narrator():
+    """没有【角色名】标签的文本默认归为【旁白】"""
+    text = "这是一段没有任何角色标记的普通文本。"
+    result = parse_dialogue(text)
+    assert len(result) == 1
+    assert result[0]["speaker"] == "旁白"
+    assert result[0]["text"] == text
 
 def test_validate_podcast_format():
     valid_text = "【旁白】故事开始...【冯奇奇】你好！【旁白】结束了。"
@@ -897,6 +989,7 @@ git commit -m "feat: add podcast wizard mode and voice sample upload API"
 """ComfyUI VoxCPM TTS 客户端"""
 import json
 import time
+import asyncio
 import httpx
 from pathlib import Path
 from typing import Optional
@@ -1195,6 +1288,7 @@ class AudioGenerationService:
         self,
         chapter_id: str,
         chapter_content: str,
+        db,  # AsyncSession for querying voice samples
         bgm_style: str = "ancient children adventure"
     ) -> AsyncGenerator[str, None]:
         """SSE 流式推送音频生成进度"""
@@ -1216,7 +1310,7 @@ class AudioGenerationService:
         yield self._sse_event("progress", {"step": "tts", "progress": 15, "message": "开始生成语音..."})
 
         unique_speakers = list(set(s["speaker"] for s in segments))
-        speaker_voice_map = await self._get_voice_map(unique_speakers)
+        speaker_voice_map = await self._get_voice_map(unique_speakers, db)
 
         tts_segments = []
         total = len(segments)
@@ -1253,11 +1347,22 @@ class AudioGenerationService:
         })
         yield self._sse_event("done", {})
 
-    async def _get_voice_map(self, speakers: list) -> dict:
-        """从数据库获取角色→参考音频映射"""
-        # TODO: 从 Character 表查询 voice_sample
-        # 返回 {"冯奇奇": "/path/to/voice_sample.wav", ...}
-        return {s: "" for s in speakers}
+    async def _get_voice_map(self, speakers: list, db) -> dict:
+        """从数据库查询角色→参考音频路径映射"""
+        from app.models.character import Character
+        from sqlalchemy import select
+
+        result = {}
+        for speaker in speakers:
+            stmt = select(Character).where(Character.name == speaker)
+            char_result = await db.execute(stmt)
+            char = char_result.scalar_one_or_none()
+            if char and char.voice_sample:
+                base_dir = Path(settings.audio_output_dir)
+                result[speaker] = str(base_dir / char.voice_sample)
+            else:
+                result[speaker] = ""
+        return result
 
     def _sse_event(self, event_type: str, data: dict) -> str:
         return f"data: {json.dumps({'type': event_type, **data})}\n\n"
@@ -1320,7 +1425,86 @@ git commit -m "feat: add audio generation service and API routes"
 
 ---
 
-## Phase 4: 前端改造
+### Task 12b: 临时音频文件清理任务
+
+**Files:**
+- Create: `backend/app/services/audio_cleanup.py`
+- Modify: `backend/app/main.py`
+
+- [ ] **Step 1: 创建清理模块**
+
+```python
+"""临时音频文件清理"""
+import asyncio
+import shutil
+from pathlib import Path
+from datetime import datetime, timedelta
+from app.config import settings
+
+class AudioCleanupService:
+    """清理 audio_tasks 完成/失败后的临时文件"""
+
+    async def cleanup_temp_files(self, task_id: str):
+        """立即清理指定 task 的临时文件"""
+        temp_dir = Path(settings.audio_output_dir) / "temp" / task_id
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    async def cleanup_old_temp_dirs(self, max_age_hours: int = 24):
+        """清理超过 max_age_hours 的临时目录"""
+        temp_root = Path(settings.audio_output_dir) / "temp"
+        if not temp_root.exists():
+            return
+
+        cutoff = datetime.now() - timedelta(hours=max_age_hours)
+        for dir_path in temp_root.iterdir():
+            if dir_path.is_dir():
+                mtime = datetime.fromtimestamp(dir_path.stat().st_mtime)
+                if mtime < cutoff:
+                    shutil.rmtree(dir_path, ignore_errors=True)
+
+    async def run_periodic_cleanup(self, interval_hours: int = 6):
+        """后台定时清理循环"""
+        while True:
+            await asyncio.sleep(interval_hours * 3600)
+            await self.cleanup_old_temp_dirs()
+
+cleanup_service = AudioCleanupService()
+```
+
+- [ ] **Step 2: 在 audio_service.py 中集成清理**
+
+在 `generate_audio_stream` 的错误处理和完成逻辑中调用清理：
+
+```python
+# 在生成失败时
+except Exception as e:
+    await cleanup_service.cleanup_temp_files(chapter_id)
+    yield self._sse_event("error", {"message": str(e)})
+
+# 在生成成功后，更新 AudioTask status 为 done 时立即清理
+await cleanup_service.cleanup_temp_files(chapter_id)
+```
+
+- [ ] **Step 3: 在 main.py 启动时注册后台清理**
+
+```python
+@app.on_event("startup")
+async def startup_event():
+    # ... existing startup code ...
+    asyncio.create_task(cleanup_service.run_periodic_cleanup())
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/app/services/audio_cleanup.py backend/app/services/audio_service.py backend/app/main.py
+git commit -m "feat: add temp audio file cleanup service with periodic background task"
+```
+
+---
+
+---
 
 ### Task 13: 新增 TypeScript 类型
 
@@ -1490,6 +1674,7 @@ const AudioProgressModal: React.FC<Props> = ({ open, chapterId, onClose, onDone 
   const [progress, setProgress] = useState(0);
   const [step, setStep] = useState('');
   const [message, setMessage] = useState('');
+  const stepRef = useRef('');  // 避免闭包陷阱
   const [steps, setSteps] = useState<{name: string; status: 'wait' | 'process' | 'finish' | 'error'}[]>([
     { name: '解析对话', status: 'wait' },
     { name: '生成语音', status: 'wait' },
@@ -1508,6 +1693,7 @@ const AudioProgressModal: React.FC<Props> = ({ open, chapterId, onClose, onDone 
       if (data.type === 'progress') {
         setProgress(data.progress || 0);
         setStep(data.step || '');
+        stepRef.current = data.step || '';  // 同步更新 ref
         setMessage(data.message || '');
 
         setSteps(prev => prev.map(s => {
@@ -1529,7 +1715,7 @@ const AudioProgressModal: React.FC<Props> = ({ open, chapterId, onClose, onDone 
       }
 
       if (data.type === 'error') {
-        setSteps(prev => prev.map(s => s.name === step ? { ...s, status: 'error' as const } : s));
+        setSteps(prev => prev.map(s => s.name === stepRef.current ? { ...s, status: 'error' as const } : s));
         eventSource.close();
       }
     };
@@ -1583,6 +1769,7 @@ git commit -m "feat: add AudioProgressModal component with SSE progress tracking
 - Create: `frontend/src/components/AudioPlayer.tsx`
 - Create: `frontend/src/pages/AudioStudio.tsx`
 - Modify: `frontend/src/pages/Chapters.tsx`
+- Modify: `frontend/src/components/CharacterCard.tsx`
 - Modify: `frontend/src/App.tsx`
 
 - [ ] **Step 1: 创建 AudioPlayer.tsx**
@@ -1664,7 +1851,53 @@ export default AudioPlayer;
 )}
 ```
 
-- [ ] **Step 4: 在 App.tsx 添加路由**
+- [ ] **Step 4: 在 CharacterCard.tsx 添加音色入口**
+
+在角色卡片中展示音色和口头禅信息，并为播客模式项目添加上传参考音频的入口：
+
+```tsx
+// 在角色描述区域下方添加（仅在 content_mode === 'podcast' 时显示）
+import { Upload, Button, message as antMsg } from 'antd';
+import { UploadOutlined, SoundOutlined } from '@ant-design/icons';
+import { audioApi } from '../services/api';
+
+{project?.content_mode === 'podcast' && (
+  <div className="voice-section" style={{ marginTop: 8, borderTop: '1px solid #f0f0f0', paddingTop: 8 }}>
+    {character.voice_sample && (
+      <div>
+        <SoundOutlined /> 已有参考音频
+        <Button type="link" size="small" danger onClick={handleDeleteVoice}>
+          删除
+        </Button>
+      </div>
+    )}
+    {character.catchphrase && (
+      <div style={{ color: '#8b8b8b', fontSize: 12 }}>
+        口头禅：{character.catchphrase}
+      </div>
+    )}
+    <Upload
+      accept=".wav,.mp3"
+      showUploadList={false}
+      customRequest={async ({ file }) => {
+        try {
+          await audioApi.uploadVoiceSample(character.id, file as File);
+          antMsg.success('音色参考音频上传成功');
+          onRefresh?.();
+        } catch (e) {
+          antMsg.error('上传失败');
+        }
+      }}
+    >
+      <Button icon={<UploadOutlined />} size="small" type="link">
+        {character.voice_sample ? '更换参考音频' : '上传参考音频'}
+      </Button>
+    </Upload>
+  </div>
+)}
+```
+
+- [ ] **Step 5: 在 App.tsx 添加路由**
 
 ```tsx
 import AudioStudio from './pages/AudioStudio';
@@ -1673,11 +1906,11 @@ import AudioStudio from './pages/AudioStudio';
 <Route path="audio-studio" element={<AudioStudio />} />
 ```
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/components/AudioPlayer.tsx frontend/src/pages/AudioStudio.tsx frontend/src/pages/Chapters.tsx frontend/src/App.tsx
-git commit -m "feat: add AudioPlayer, AudioStudio page, podcast button in Chapters"
+git add frontend/src/components/AudioPlayer.tsx frontend/src/pages/AudioStudio.tsx frontend/src/pages/Chapters.tsx frontend/src/components/CharacterCard.tsx frontend/src/App.tsx
+git commit -m "feat: add AudioPlayer, AudioStudio, podcast button, CharacterCard voice upload"
 ```
 
 ---

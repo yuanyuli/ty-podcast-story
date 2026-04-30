@@ -1514,8 +1514,70 @@ async def generate_chapter_content_stream(
                 )
                 logger.info(f"📝 使用叙事人称: {chapter_perspective}")
                 
+                # 🎙️ 播客模式：使用播客剧集模板
+                if project.content_mode == 'podcast':
+                    is_first = not previous_chapters_data or current_chapter.chapter_number == 1
+                    template_key = "PODCAST_EPISODE_FIRST" if is_first else "PODCAST_EPISODE_NEXT"
+
+                    # 从大纲 structure 提取播客大纲数据
+                    outline_data = {}
+                    if outline and outline.structure:
+                        try:
+                            outline_data = json.loads(outline.structure)
+                        except json.JSONDecodeError:
+                            logger.warning(f"解析大纲 {outline.id} structure 失败")
+
+                    template = await PromptService.get_template(template_key, current_user_id, db_session)
+
+                    # 获取角色信息（播客模式简化版本）
+                    char_result = await db_session.execute(
+                        select(Character).where(Character.project_id == current_chapter.project_id)
+                    )
+                    all_characters = char_result.scalars().all()
+                    podcast_characters_info = "\n".join([
+                        f"- {c.name} ({c.role_type or '角色'}): "
+                        f"{c.personality[:100] if c.personality else '暂无描述'}"
+                        for c in all_characters
+                    ])
+
+                    # 确定历史时期（大纲 > 项目 > 默认）
+                    historical_period = outline_data.get(
+                        "historical_period",
+                        project.world_time_period or "商朝末年"
+                    )
+
+                    base_prompt = PromptService.format_prompt(
+                        template,
+                        project_title=project.title,
+                        episode_number=current_chapter.chapter_number,
+                        episode_title=current_chapter.title or outline_data.get("title", f"第{current_chapter.chapter_number}集"),
+                        historical_period=historical_period,
+                        historical_figure=outline_data.get("historical_figure", ""),
+                        knowledge_point=outline_data.get("knowledge_point", ""),
+                        character_focus=outline_data.get("character_focus", ""),
+                        emotion=outline_data.get("emotion", "好奇"),
+                        target_word_count=target_word_count,
+                        estimated_duration=outline_data.get("estimated_duration", "6分钟"),
+                        characters_info=podcast_characters_info or "暂无角色信息",
+                        scenes="\n".join(outline_data.get("scenes", [])) if outline_data.get("scenes") else "暂无场景描述",
+                        prev_cliffhanger="" if is_first else outline_data.get("cliffhanger", ""),
+                    )
+                    logger.info(f"🎙️ 播客模式: 使用模板 {template_key}，第{current_chapter.chapter_number}集")
+
+                    # 应用写作风格
+                    if style_content:
+                        prompt = WritingStyleManager.apply_style_to_prompt(base_prompt, style_content)
+                    else:
+                        prompt = base_prompt
+
+                    podcast_mode = True  # 标记播客模式，用于后续验证
+                else:
+                    podcast_mode = False
+
                 # 🚀 根据大纲模式选择提示词模板和参数
-                if outline_mode == 'one-to-one':
+                if podcast_mode:
+                    pass  # 已经设置了 prompt，跳过
+                elif outline_mode == 'one-to-one':
                     # 1-1模式
                     if chapter_context.continuation_point:
                         # 有上一章内容
@@ -1605,11 +1667,12 @@ async def generate_chapter_content_stream(
                         )
                         logger.debug(f"创建第一章提示词: {base_prompt}")
                 
-                # 应用写作风格
-                if style_content:
-                    prompt = WritingStyleManager.apply_style_to_prompt(base_prompt, style_content)
-                else:
-                    prompt = base_prompt
+                # 应用写作风格（播客模式已在分支内处理）
+                if not podcast_mode:
+                    if style_content:
+                        prompt = WritingStyleManager.apply_style_to_prompt(base_prompt, style_content)
+                    else:
+                        prompt = base_prompt
                 
                 # === 准备阶段 ===
                 yield await tracker.preparing("准备AI提示词...")
@@ -1687,9 +1750,27 @@ async def generate_chapter_content_stream(
                 current_chapter.word_count = new_word_count
                 current_chapter.status = "completed"
                 
+                # 播客模式：自动验证格式
+                if podcast_mode:
+                    from app.services.dialogue_parser import validate_podcast_format
+                    validation = validate_podcast_format(full_content)
+                    if not validation["valid"]:
+                        yield await tracker.warning(
+                            "格式验证失败: " + "; ".join(validation["errors"])
+                        )
+                    if validation["warnings"]:
+                        yield await tracker.warning(
+                            "; ".join(validation["warnings"])
+                        )
+                    logger.info(
+                        f"播客格式验证: valid={validation['valid']}, "
+                        f"speakers={validation['stats'].get('speakers', [])}, "
+                        f"segments={validation['stats'].get('segment_count', 0)}"
+                    )
+
                 # 更新项目字数
                 project.current_words = project.current_words - old_word_count + new_word_count
-                
+
                 # 记录生成历史
                 history = GenerationHistory(
                     project_id=current_chapter.project_id,
@@ -1699,7 +1780,7 @@ async def generate_chapter_content_stream(
                     model="default"
                 )
                 db_session.add(history)
-                
+
                 await db_session.commit()
                 db_committed = True
                 await db_session.refresh(current_chapter)

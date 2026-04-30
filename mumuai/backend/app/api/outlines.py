@@ -1689,6 +1689,181 @@ async def continue_outline_generator(
         yield await tracker.error(f"续写失败: {str(e)}")
 
 
+async def podcast_outline_generator(
+    data: Dict[str, Any],
+    db: AsyncSession,
+    user_ai_service: AIService
+) -> AsyncGenerator[str, None]:
+    """播客剧集大纲SSE生成器"""
+    db_committed = False
+    tracker = WizardProgressTracker("播客大纲")
+
+    try:
+        yield await tracker.start()
+
+        project_id = data.get("project_id")
+        chapter_count = int(data.get("chapter_count", 10))
+
+        yield await tracker.loading("加载项目信息...", 0.3)
+        result = await db.execute(
+            select(Project).where(Project.id == project_id)
+        )
+        project = result.scalar_one_or_none()
+        if not project:
+            yield await tracker.error("项目不存在", 404)
+            return
+
+        yield await tracker.loading(f"准备生成{chapter_count}集播客剧集大纲...", 0.6)
+
+        characters_result = await db.execute(
+            select(Character).where(Character.project_id == project_id)
+        )
+        characters = characters_result.scalars().all()
+        characters_info = _build_characters_info(characters)
+
+        user_id_for_mcp = data.get("user_id")
+        if user_id_for_mcp:
+            user_ai_service.user_id = user_id_for_mcp
+            user_ai_service.db_session = db
+
+        yield await tracker.preparing("准备播客大纲提示词...")
+        template = await PromptService.get_template("PODCAST_OUTLINE", user_id_for_mcp, db)
+        prompt = PromptService.format_prompt(
+            template,
+            project_title=project.title,
+            main_characters=characters_info or "冯奇奇、五花、布皮冻、白木苏、肥笼",
+            historical_period=project.world_time_period or "商朝末年"
+        )
+        logger.info(f"播客大纲生成: project={project.title}")
+
+        model_param = data.get("model")
+        provider_param = data.get("provider")
+
+        estimated_total = chapter_count * 800
+        accumulated_text = ""
+        chunk_count = 0
+
+        yield await tracker.generating(current_chars=0, estimated_total=estimated_total)
+
+        async for chunk in user_ai_service.generate_text_stream(
+            prompt=prompt,
+            provider=provider_param,
+            model=model_param
+        ):
+            chunk_count += 1
+            accumulated_text += chunk
+            yield await tracker.generating_chunk(chunk)
+            if chunk_count % 10 == 0:
+                yield await tracker.generating(
+                    current_chars=len(accumulated_text),
+                    estimated_total=estimated_total
+                )
+            if chunk_count % 20 == 0:
+                yield await tracker.heartbeat()
+
+        yield await tracker.parsing("解析播客大纲数据...")
+
+        max_retries = 2
+        retry_count = 0
+        outline_data = None
+        ai_content = accumulated_text
+
+        while retry_count <= max_retries:
+            try:
+                outline_data = _parse_ai_response(ai_content, raise_on_error=True)
+                break
+            except JSONParseError:
+                retry_count += 1
+                if retry_count > max_retries:
+                    logger.warning("播客大纲解析失败，使用fallback数据")
+                    yield await tracker.warning("解析失败，使用备用数据")
+                    outline_data = _parse_ai_response(ai_content, raise_on_error=False)
+                    break
+
+                yield await tracker.retry(retry_count, max_retries, "JSON解析失败")
+                tracker.reset_generating_progress()
+                accumulated_text = ""
+                chunk_count = 0
+                retry_prompt = prompt + "\n\n【重要提醒】请确保返回完整的JSON数组。"
+
+                async for chunk in user_ai_service.generate_text_stream(
+                    prompt=retry_prompt,
+                    provider=provider_param,
+                    model=model_param
+                ):
+                    chunk_count += 1
+                    accumulated_text += chunk
+                    yield await tracker.generating_chunk(chunk)
+                    if chunk_count % 20 == 0:
+                        yield await tracker.heartbeat()
+
+                ai_content = accumulated_text
+
+        # 删除旧大纲
+        yield await tracker.saving("清理旧大纲...", 0.2)
+        from sqlalchemy import delete as sql_delete
+
+        old_chapters_result = await db.execute(
+            select(Chapter).where(Chapter.project_id == project_id)
+        )
+        old_chapters = old_chapters_result.scalars().all()
+        deleted_word_count = sum(ch.word_count or 0 for ch in old_chapters)
+        await db.execute(sql_delete(Chapter).where(Chapter.project_id == project_id))
+        await db.execute(sql_delete(Outline).where(Outline.project_id == project_id))
+
+        if deleted_word_count > 0:
+            project.current_words = max(0, project.current_words - deleted_word_count)
+
+        # 保存播客大纲（将 podcast 结构化数据存入 structure 字段）
+        yield await tracker.saving("保存播客大纲...", 0.6)
+        outlines = await _save_outlines(
+            project_id, outline_data, db, start_index=1
+        )
+
+        history = GenerationHistory(
+            project_id=project_id,
+            prompt=prompt,
+            generated_content=json.dumps({"content": ai_content}, ensure_ascii=False),
+            model=data.get("model") or "default"
+        )
+        db.add(history)
+
+        await db.commit()
+        db_committed = True
+
+        for outline in outlines:
+            await db.refresh(outline)
+
+        yield await tracker.complete()
+        yield await tracker.result({
+            "message": f"成功生成{len(outlines)}集播客大纲",
+            "total_episodes": len(outlines),
+            "outlines": [
+                {
+                    "id": o.id,
+                    "project_id": o.project_id,
+                    "title": o.title,
+                    "content": o.content,
+                    "order_index": o.order_index,
+                    "structure": o.structure,
+                    "created_at": o.created_at.isoformat() if o.created_at else None,
+                    "updated_at": o.updated_at.isoformat() if o.updated_at else None
+                } for o in outlines
+            ]
+        })
+        yield await tracker.done()
+
+    except GeneratorExit:
+        logger.warning("播客大纲生成器被提前关闭")
+        if not db_committed and db.in_transaction():
+            await db.rollback()
+    except Exception as e:
+        logger.error(f"播客大纲生成失败: {str(e)}")
+        if not db_committed and db.in_transaction():
+            await db.rollback()
+        yield await tracker.error(f"生成失败: {str(e)}")
+
+
 @router.post("/generate-stream", summary="AI生成/续写大纲(SSE流式)")
 async def generate_outline_stream(
     data: Dict[str, Any],
@@ -1721,7 +1896,11 @@ async def generate_outline_stream(
     # 验证用户权限
     user_id = getattr(request.state, 'user_id', None)
     project = await verify_project_access(data.get("project_id"), user_id, db)
-    
+
+    # 播客模式：使用播客大纲生成器
+    if project.content_mode == 'podcast':
+        return create_sse_response(podcast_outline_generator(data, db, user_ai_service))
+
     # 判断模式
     mode = data.get("mode", "auto")
     

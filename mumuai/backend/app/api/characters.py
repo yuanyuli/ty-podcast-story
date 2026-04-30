@@ -1523,3 +1523,91 @@ async def validate_import(
     except Exception as e:
         logger.error(f"验证导入文件失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"验证失败: {str(e)}")
+
+
+# ========== 播客模式：音色参考音频管理 ==========
+
+@router.post("/{character_id}/voice-sample")
+async def upload_voice_sample(
+    character_id: str,
+    file: UploadFile = File(...),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """上传角色音色参考音频（播客模式）"""
+    from pathlib import Path
+    from app.config import settings
+
+    user_id = getattr(request.state, "user_id", None) if request else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未登录")
+
+    result = await db.execute(
+        select(Character).where(Character.id == character_id)
+    )
+    character = result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(404, detail="角色不存在")
+
+    await verify_project_access(character.project_id, user_id, db)
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(400, detail="文件大小不能超过 5MB")
+
+    char_dir = Path(settings.audio_output_dir) / "voice_samples" / character_id
+    char_dir.mkdir(parents=True, exist_ok=True)
+    file_path = char_dir / "reference.wav"
+
+    if file.filename and file.filename.lower().endswith(".wav"):
+        file_path.write_bytes(content)
+    else:
+        import subprocess
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", "pipe:0", "-ar", "16000", "-ac", "1", str(file_path)],
+            input=content, capture_output=True,
+        )
+        if result.returncode != 0:
+            raise HTTPException(500, detail=f"音频转码失败: {result.stderr.decode()}")
+
+    character.voice_sample = str(
+        file_path.relative_to(Path(settings.audio_output_dir))
+    )
+    await db.commit()
+
+    logger.info(f"角色 {character.name} 音色参考音频已上传")
+    return {"voice_sample": character.voice_sample, "message": "上传成功"}
+
+
+@router.delete("/{character_id}/voice-sample")
+async def delete_voice_sample(
+    character_id: str,
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除角色音色参考音频（播客模式）"""
+    from pathlib import Path
+    from app.config import settings
+
+    user_id = getattr(request.state, "user_id", None) if request else None
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未登录")
+
+    result = await db.execute(
+        select(Character).where(Character.id == character_id)
+    )
+    character = result.scalar_one_or_none()
+    if not character:
+        raise HTTPException(404, detail="角色不存在")
+
+    await verify_project_access(character.project_id, user_id, db)
+
+    if character.voice_sample:
+        file_path = Path(settings.audio_output_dir) / character.voice_sample
+        if file_path.exists():
+            file_path.unlink()
+
+    character.voice_sample = None
+    await db.commit()
+
+    return {"message": "删除成功"}

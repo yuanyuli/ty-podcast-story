@@ -78,6 +78,21 @@ class OutlineListResponse(BaseModel):
     items: list[OutlineResponse]
 
 
+class PodcastOutlineStructure(BaseModel):
+    """播客大纲结构"""
+    episode_number: int
+    title: str
+    historical_period: Optional[str] = None
+    historical_figure: Optional[str] = None
+    knowledge_point: Optional[str] = None
+    character_focus: Optional[str] = None
+    scenes: Optional[List[str]] = None
+    emotion: Optional[str] = None
+    cliffhanger: Optional[str] = None
+    bgm_style: Optional[str] = None
+    estimated_duration: Optional[str] = None
+
+
 class ChapterPlanItem(BaseModel):
     """单个章节规划项"""
     sub_index: int = Field(..., description="子章节序号", ge=1)

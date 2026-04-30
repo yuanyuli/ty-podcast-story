@@ -5,7 +5,9 @@ import json
 
 class WritingStyleManager:
     """写作风格管理器"""
-    
+
+    CATEGORIES = ['novel', 'podcast', 'general']
+
     @staticmethod
     def apply_style_to_prompt(base_prompt: str, style_content: str) -> str:
         """
@@ -2547,6 +2549,141 @@ class PromptService:
 ❌ chapter_number/title 与输入不一致
 ❌ 使用 markdown 或代码块
 </constraints>"""
+
+    # ========== 播客模式提示词模板 ==========
+
+    # 播客世界观设计
+    PODCAST_WORLD = """<system>
+你是专业的儿童广播剧世界观设计师，擅长为3-10岁小朋友打造沉浸式历史穿越故事的世界设定。你会根据历史时期设计生动有趣的时代背景、声音氛围和BGM风格。
+</system>
+
+<task>
+根据以下项目信息，设计一个适合儿童睡前广播剧的世界观设定，包括时代背景、声音氛围、BGM风格建议。
+项目名称：{project_title}
+目标年龄段：{target_age}
+历史时期：{historical_period}
+</task>
+
+<guidelines>
+1. 时代背景描述要生动有趣，让小朋友一听就有画面感
+2. 声音氛围要具体：比如清晨的鸟叫、集市的喧闹、远处的马蹄声
+3. 提供 BGM 风格建议：情绪、乐器、节奏
+</guidelines>
+
+<output>
+请输出 JSON 格式：
+{{"time_period": "朝代+具体时期", "location": "主要场景地点", "audio_atmosphere": "声音氛围描述（3-5句）", "bgm_style": "乐器+节奏+情绪", "sound_effects": ["场景音效1", "场景音效2"]}}
+</output>"""
+
+    # 播客剧集大纲
+    PODCAST_OUTLINE = """<system>
+你是儿童广播剧的编剧，擅长将历史故事改编为有趣的穿越冒险剧集。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲历史知识。
+</system>
+
+<task>
+为《{project_title}》设计剧集大纲。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲故事。
+主角：{main_characters}
+历史时期：{historical_period}
+</task>
+
+<guidelines>
+1. 每集必须有一个清晰的历史知识点
+2. 必须有一个穿越的趣味场景（比如掉进古代厨房/集市/战场）
+3. 必须有一个角色互动亮点（和历史人物的对话）
+4. 结尾必须有悬念钩子
+5. 预估时长5-8分钟（约1500-2500字）
+</guidelines>
+
+<output>
+按以下 JSON 格式输出剧集列表：
+[{{"episode_number": 1, "title": "...", "historical_period": "...", "historical_figure": "...", "knowledge_point": "...", "character_focus": "...", "emotion": "...", "cliffhanger": "...", "bgm_style": "...", "estimated_duration": "6分钟"}}]
+</output>"""
+
+    # 播客第1集内容生成
+    PODCAST_EPISODE_FIRST = """<system>
+你是儿童广播剧的剧本作家，使用"旁白叙述+角色对话"的广播剧格式创作内容。你的作品将在喜马拉雅等平台播放，听众是3-10岁的小朋友和他们的家长。
+</system>
+
+<task>
+请创作《{project_title}》的第{episode_number}集：{episode_title}。
+这是该系列的第一集，需要建立世界观、介绍主角团、展开第一次穿越冒险。
+</task>
+
+<input>
+历史时期：{historical_period}
+历史人物：{historical_figure}
+知识点：{knowledge_point}
+角色聚焦：{character_focus}
+情感基调：{emotion}
+目标字数：{target_word_count}字（对应{estimated_duration}时长）
+
+主角团：
+{characters_info}
+
+场景描述：
+{scenes}
+</input>
+
+<guidelines>
+1. 必须使用【角色名】格式标注每一段发言，包括【旁白】
+2. 对话要生动有趣，每个角色都有鲜明的说话风格
+3. 冯奇奇：好奇捣蛋，总问"为什么"
+4. 五花：三句不离吃的，但关键时刻很靠谱
+5. 布皮冻：说话像果冻一样Q弹，喜欢说"你猜怎么着"
+6. 白木苏：温和有耐心，像讲故事的大哥哥
+7. 肥笼：用"喵呜"和动作参与剧情
+8. 历史人物说话要符合身份但有反差萌
+9. 旁白语言要温暖有画面感，像睡前故事
+10. 结尾设置悬念："小朋友们，想知道后面发生了什么吗？闭上眼睛，我们明天继续..."
+</guidelines>
+
+<constraints>
+- 总字数控制在{target_word_count}字以内
+- 每段对话不超过50字（小朋友注意力）
+- 必须有至少2个角色之间的互动对话
+- 必须有一个让小朋友笑出声的桥段
+</constraints>
+
+<output>
+请直接按以下格式输出广播剧内容：
+
+【旁白】（历史场景描述，温暖有画面感）
+【角色名1】（对话内容，动作描述用括号）
+【角色名2】（对话内容）
+【旁白】（转场叙述）
+...
+</output>"""
+
+    # 播客后续集内容生成（基于第1集模板替换任务描述）
+    PODCAST_EPISODE_NEXT = PODCAST_EPISODE_FIRST.replace(
+        "这是该系列的第一集，需要建立世界观、介绍主角团、展开第一次穿越冒险。",
+        "这是第{episode_number}集，需要承接上一集的悬念（{prev_cliffhanger}），继续展开冒险。"
+    )
+
+    # 播客角色设计
+    PODCAST_CHARACTER = """<system>
+你是儿童广播剧的角色设计师，擅长为有声故事设计声音辨识度极高的角色。
+</system>
+
+<task>
+为广播剧《{project_title}》设计角色的详细设定，特别注重声音特征和口头禅。
+</task>
+
+<guidelines>
+1. 每个角色需要独特的说话方式和声音标签
+2. 口头禅要简单好记，小朋友能记住
+3. 声音描述要具体："清脆像铃铛"而不是"好听"
+</guidelines>
+
+<output>
+请输出 JSON 格式：
+{{"name": "...", "age": "...", "gender": "...", "personality": "...", "voice_style": "清脆/稚嫩/低沉/欢快等", "speaking_pattern": "说话节奏和习惯", "catchphrase": "口头禅"}}
+</output>"""
+
+    # 播客重新生成（基于第1集模板替换创作指令）
+    PODCAST_REGENERATE = PODCAST_EPISODE_FIRST.replace(
+        "请创作", "根据以下反馈重新创作"
+    )
 
     @staticmethod
     def format_prompt(template: str, **kwargs) -> str:

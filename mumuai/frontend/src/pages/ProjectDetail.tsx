@@ -19,6 +19,7 @@ import {
   BulbOutlined,
   CloudOutlined,
   MoonOutlined,
+  SoundOutlined,
 } from '@ant-design/icons';
 import { useStore } from '../store';
 import { useCharacterSync, useOutlineSync, useChapterSync } from '../store/hooks';
@@ -157,6 +158,15 @@ export default function ProjectDetail() {
           icon: <BookOutlined />,
           label: <Link to={`/project/${projectId}/chapters`}>章节管理</Link>,
         },
+        ...(currentProject?.content_mode === 'podcast'
+          ? [
+              {
+                key: 'audio-studio',
+                icon: <SoundOutlined />,
+                label: <Link to={`/project/${projectId}/audio-studio`}>音频工作室</Link>,
+              },
+            ]
+          : []),
         {
           key: 'chapter-analysis',
           icon: <FundOutlined />,
@@ -228,6 +238,15 @@ export default function ProjectDetail() {
       icon: <BookOutlined />,
       label: <Link to={`/project/${projectId}/chapters`}>章节管理</Link>,
     },
+    ...(currentProject?.content_mode === 'podcast'
+      ? [
+          {
+            key: 'audio-studio',
+            icon: <SoundOutlined />,
+            label: <Link to={`/project/${projectId}/audio-studio`}>音频工作室</Link>,
+          },
+        ]
+      : []),
     {
       key: 'chapter-analysis',
       icon: <FundOutlined />,
@@ -262,6 +281,7 @@ export default function ProjectDetail() {
     if (path.includes('/chapter-analysis')) return 'chapter-analysis';
     if (path.includes('/foreshadows')) return 'foreshadows';
     if (path.includes('/chapters')) return 'chapters';
+    if (path.includes('/audio-studio')) return 'audio-studio';
     if (path.includes('/writing-styles')) return 'writing-styles';
     if (path.includes('/prompt-workshop')) return 'prompt-workshop';
     if (path.includes('/sponsor')) return 'sponsor';

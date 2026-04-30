@@ -19,6 +19,7 @@ import PromptWorkshop from './pages/PromptWorkshop';
 import Settings from './pages/Settings';
 import MCPPlugins from './pages/MCPPlugins';
 import UserManagement from './pages/UserManagement';
+import AudioStudio from './pages/AudioStudio';
 import PromptTemplates from './pages/PromptTemplates';
 import Sponsor from './pages/Sponsor';
 // import Polish from './pages/Polish';
@@ -67,6 +68,7 @@ function App() {
             <Route path="foreshadows" element={<Foreshadows />} />
             <Route path="writing-styles" element={<WritingStyles />} />
             <Route path="prompt-workshop" element={<PromptWorkshop />} />
+            <Route path="audio-studio" element={<AudioStudio />} />
             <Route path="sponsor" element={<Sponsor />} />
             {/* <Route path="polish" element={<Polish />} /> */}
           </Route>

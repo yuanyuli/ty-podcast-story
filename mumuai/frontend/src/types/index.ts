@@ -95,6 +95,7 @@ export interface Project {
   wizard_status?: 'incomplete' | 'completed';
   wizard_step?: number;
   outline_mode: 'one-to-one' | 'one-to-many';  // 大纲章节模式
+  content_mode?: 'novel' | 'podcast';  // 内容模式
   world_time_period?: string;
   world_location?: string;
   world_atmosphere?: string;
@@ -113,6 +114,7 @@ export interface ProjectCreate {
   genre?: string;
   target_words?: number;
   outline_mode?: 'one-to-one' | 'one-to-many';  // 大纲章节模式,默认one-to-many
+  content_mode?: 'novel' | 'podcast';  // 内容模式
   wizard_status?: 'incomplete' | 'completed';
   wizard_step?: number;
   world_time_period?: string;
@@ -233,6 +235,12 @@ export interface Character {
     career_id: string;
     stage: number;
   }>;
+  // 音色配置（播客模式）
+  voice_id?: string;
+  voice_speed?: number;
+  voice_pitch?: number;
+  voice_sample?: string;
+  catchphrase?: string;
   created_at: string;
   updated_at: string;
 }
@@ -255,6 +263,12 @@ export interface CharacterUpdate {
   location?: string;
   motto?: string;
   color?: string;
+  // 音色配置（播客模式）
+  voice_id?: string;
+  voice_speed?: number;
+  voice_pitch?: number;
+  voice_sample?: string;
+  catchphrase?: string;
 }
 
 // 展开规划数据结构
@@ -1084,3 +1098,59 @@ export const PROMPT_CATEGORIES: Record<string, string> = {
   game: '游戏/电竞',
   other: '其他',
 };
+
+// ========== 播客音频相关类型 ==========
+
+export type ContentMode = 'novel' | 'podcast';
+
+export interface DialogueSegment {
+  order: number;
+  speaker: string;
+  text: string;
+  emotion?: string;
+  estimated_duration_ms?: number;
+}
+
+export interface AudioTask {
+  id: string;
+  chapter_id: string;
+  status: 'queued' | 'parsing' | 'tts' | 'bgm' | 'mixing' | 'done' | 'failed';
+  progress: number;
+  error_message?: string;
+  created_at: string;
+}
+
+export interface AudioFile {
+  id: string;
+  chapter_id: string;
+  file_path: string;
+  duration_seconds: number;
+  file_size_bytes: number;
+  format: string;
+  created_at: string;
+}
+
+export interface VoiceConfig {
+  voice_id?: string;
+  voice_speed?: number;
+  voice_pitch?: number;
+  voice_sample?: string;
+  catchphrase?: string;
+}
+
+export interface BGMPreset {
+  id: string;
+  name: string;
+  style: string;
+  tags: string[];
+  path?: string;
+}
+
+export interface AudioSSEEvent {
+  type: 'progress' | 'result' | 'error' | 'done';
+  step?: string;
+  progress?: number;
+  message?: string;
+  file_path?: string;
+  duration_seconds?: number;
+}

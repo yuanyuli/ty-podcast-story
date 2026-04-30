@@ -1182,3 +1182,55 @@ export const foreshadowApi = {
       data
     ),
 };
+
+// ========== 播客音频 API ==========
+
+export const audioApi = {
+  // 触发音频生成
+  generate: (chapterId: string, data?: { bgm_style?: string }) =>
+    api.post<unknown, import('../types').AudioTask>(
+      `/chapters/${chapterId}/audio/generate`,
+      data || {}
+    ),
+
+  // SSE 流式推送生成进度
+  streamProgressUrl: (chapterId: string, bgmStyle?: string) =>
+    `/api/chapters/${chapterId}/audio/stream?bgm_style=${encodeURIComponent(
+      bgmStyle || 'ancient children adventure'
+    )}`,
+
+  // 查询生成状态
+  getStatus: (chapterId: string) =>
+    api.get<unknown, import('../types').AudioTask>(
+      `/chapters/${chapterId}/audio/status`
+    ),
+
+  // 下载 MP3
+  downloadUrl: (chapterId: string) =>
+    `/api/chapters/${chapterId}/audio/download`,
+
+  // 取消任务
+  cancel: (taskId: string) =>
+    api.delete(`/audio/${taskId}`),
+
+  // BGM 预设
+  getBGMPresets: () =>
+    api.get<unknown, { presets: import('../types').BGMPreset[] }>(
+      '/audio/presets/bgm'
+    ),
+
+  // 上传音色参考音频
+  uploadVoiceSample: (characterId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(
+      `/characters/${characterId}/voice-sample`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+  },
+
+  // 删除音色参考音频
+  deleteVoiceSample: (characterId: string) =>
+    api.delete(`/characters/${characterId}/voice-sample`),
+};

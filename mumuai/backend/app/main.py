@@ -27,23 +27,38 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    import asyncio
+
     # 注册MCP状态同步服务
     register_status_sync()
-    
+
+    # 启动音频临时文件后台清理
+    from app.services.audio_cleanup import cleanup_service
+    cleanup_task = asyncio.create_task(
+        cleanup_service.run_periodic_cleanup()
+    )
+
     logger.info("应用启动完成")
-    
+
     yield
-    
+
+    # 停止后台清理
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+
     # 清理MCP插件
     await mcp_client.cleanup()
-    
+
     # 清理HTTP客户端池
     from app.services.ai_service import cleanup_http_clients
     await cleanup_http_clients()
-    
+
     # 关闭数据库连接
     await close_db()
-    
+
     logger.info("应用已关闭")
 
 
@@ -130,7 +145,7 @@ from app.api import (
     wizard_stream, relationships, organizations,
     auth, users, settings, writing_styles, memories,
     mcp_plugins, admin, inspiration, prompt_templates,
-    changelog, careers, foreshadows, prompt_workshop, book_import
+    changelog, careers, foreshadows, prompt_workshop, book_import, audio
 )
 
 app.include_router(auth.router, prefix="/api")
@@ -155,6 +170,7 @@ app.include_router(prompt_templates.router, prefix="/api")  # 提示词模板管
 app.include_router(changelog.router, prefix="/api")  # 更新日志API
 app.include_router(prompt_workshop.router, prefix="/api")  # 提示词工坊API
 app.include_router(book_import.router, prefix="/api")  # 拆书导入API
+app.include_router(audio.router, prefix="/api")  # 播客音频API
 
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():

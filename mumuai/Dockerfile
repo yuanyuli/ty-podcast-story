@@ -55,6 +55,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     netcat-traditional \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制后端依赖文件

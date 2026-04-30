@@ -62,14 +62,25 @@ async def world_building_generator(
         
         # 获取基础提示词（支持自定义）
         yield await tracker.preparing("准备AI提示词...")
-        template = await PromptService.get_template("WORLD_BUILDING", user_id, db)
-        base_prompt = PromptService.format_prompt(
-            template,
-            title=title,
-            theme=theme,
-            genre=genre or "通用类型",
-            description=description or "暂无简介"
-        )
+
+        content_mode = data.get("content_mode", "novel")
+        if content_mode == "podcast":
+            template = await PromptService.get_template("PODCAST_WORLD", user_id, db)
+            base_prompt = PromptService.format_prompt(
+                template,
+                project_title=title,
+                target_age=data.get("target_age", "3-10岁"),
+                historical_period=data.get("historical_period", "商朝末年"),
+            )
+        else:
+            template = await PromptService.get_template("WORLD_BUILDING", user_id, db)
+            base_prompt = PromptService.format_prompt(
+                template,
+                title=title,
+                theme=theme,
+                genre=genre or "通用类型",
+                description=description or "暂无简介"
+            )
         
         # 设置用户信息以启用MCP
         if user_id:

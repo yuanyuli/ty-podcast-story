@@ -1558,6 +1558,8 @@ async def generate_chapter_content_stream(
                         emotion=outline_data.get("emotion", "好奇"),
                         target_word_count=target_word_count,
                         estimated_duration=outline_data.get("estimated_duration", "6分钟"),
+                        bgm_style=outline_data.get("bgm_style", "古筝+编钟，舒缓明快"),
+                        sound_effects=", ".join(outline_data.get("sound_effects", [])) if outline_data.get("sound_effects") else "古代集市喧闹、风吹树叶、远处马蹄声",
                         characters_info=podcast_characters_info or "暂无角色信息",
                         scenes="\n".join(outline_data.get("scenes", [])) if outline_data.get("scenes") else "暂无场景描述",
                         prev_cliffhanger="" if is_first else outline_data.get("cliffhanger", ""),

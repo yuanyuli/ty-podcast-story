@@ -727,19 +727,43 @@ async def characters_generator(
                             batch_requirements += "\n主要是配角(supporting)和反派(antagonist)"
                     
                     # 获取自定义提示词模板
-                    template = await PromptService.get_template("CHARACTERS_BATCH_GENERATION", user_id, db)
-                    # 构建基础提示词
-                    base_prompt = PromptService.format_prompt(
-                        template,
-                        count=current_batch_size,  # 传递精确数量
-                        time_period=world_context.get("time_period", ""),
-                        location=world_context.get("location", ""),
-                        atmosphere=world_context.get("atmosphere", ""),
-                        rules=world_context.get("rules", ""),
-                        theme=theme or project.theme or "",
-                        genre=genre or project.genre or "",
-                        requirements=batch_requirements + careers_context  # 添加职业上下文
-                    )
+                    # 检查内容模式是否为播客模式
+                    content_mode = data.get("content_mode", project.content_mode if project else "novel")
+
+                    if content_mode == "podcast":
+                        # 播客模式：使用 PODCAST_CHARACTER 模板
+                        existing_chars_for_podcast = await db.execute(
+                            select(Character).where(Character.project_id == project_id)
+                        )
+                        existing_podcast_chars = existing_chars_for_podcast.scalars().all()
+                        existing_names = ", ".join([c.name for c in existing_podcast_chars]) if existing_podcast_chars else "无"
+
+                        template = await PromptService.get_template("PODCAST_CHARACTER", user_id, db)
+                        base_prompt = PromptService.format_prompt(
+                            template,
+                            project_title=project.title,
+                            count=current_batch_size,
+                            character_type="主角团+历史嘉宾",
+                            historical_period=world_context.get("time_period", project.world_time_period or "商朝末年"),
+                            location=world_context.get("location", project.world_location or "商朝·朝歌城"),
+                            atmosphere=world_context.get("atmosphere", project.world_atmosphere or "神秘悠远"),
+                            existing_characters=existing_names,
+                        )
+                    else:
+                        # 小说模式：保持原有逻辑
+                        template = await PromptService.get_template("CHARACTERS_BATCH_GENERATION", user_id, db)
+                        # 构建基础提示词
+                        base_prompt = PromptService.format_prompt(
+                            template,
+                            count=current_batch_size,  # 传递精确数量
+                            time_period=world_context.get("time_period", ""),
+                            location=world_context.get("location", ""),
+                            atmosphere=world_context.get("atmosphere", ""),
+                            rules=world_context.get("rules", ""),
+                            theme=theme or project.theme or "",
+                            genre=genre or project.genre or "",
+                            requirements=batch_requirements + careers_context  # 添加职业上下文
+                        )
                     
                     prompt = base_prompt
                     

@@ -84,28 +84,43 @@ class AutoCharacterService:
             careers_info += "\n⚠️ 重要提示：生成角色时，职业阶段不能超过该职业的最高阶段！\n"
         
         # 构建角色生成提示词
-        template = await PromptService.get_template(
-            "AUTO_CHARACTER_GENERATION",
-            user_id,
-            db
-        )
-        
-        existing_chars_summary = self._build_character_summary(existing_characters)
-        
-        prompt = PromptService.format_prompt(
-            template,
-            title=project.title,
-            genre=project.genre or "未设定",
-            theme=project.theme or "未设定",
-            time_period=project.world_time_period or "未设定",
-            location=project.world_location or "未设定",
-            atmosphere=project.world_atmosphere or "未设定",
-            rules=project.world_rules or "未设定",
-            existing_characters=existing_chars_summary + careers_info,
-            plot_context="根据剧情需要引入的新角色",
-            character_specification=json.dumps(spec, ensure_ascii=False, indent=2),
-            mcp_references=""  # MCP工具通过AI服务自动加载
-        )
+        if project.content_mode == "podcast":
+            # 播客模式：使用 PODCAST_CHARACTER 模板
+            template = await PromptService.get_template("PODCAST_CHARACTER", user_id, db)
+            existing_names = ", ".join([c.name for c in existing_characters]) if existing_characters else "无"
+            prompt = PromptService.format_prompt(
+                template,
+                project_title=project.title,
+                count=1,
+                character_type="历史嘉宾",
+                historical_period=project.world_time_period or "商朝末年",
+                location=project.world_location or "未设定",
+                atmosphere=project.world_atmosphere or "未设定",
+                existing_characters=existing_names,
+            )
+        else:
+            template = await PromptService.get_template(
+                "AUTO_CHARACTER_GENERATION",
+                user_id,
+                db
+            )
+
+            existing_chars_summary = self._build_character_summary(existing_characters)
+
+            prompt = PromptService.format_prompt(
+                template,
+                title=project.title,
+                genre=project.genre or "未设定",
+                theme=project.theme or "未设定",
+                time_period=project.world_time_period or "未设定",
+                location=project.world_location or "未设定",
+                atmosphere=project.world_atmosphere or "未设定",
+                rules=project.world_rules or "未设定",
+                existing_characters=existing_chars_summary + careers_info,
+                plot_context="根据剧情需要引入的新角色",
+                character_specification=json.dumps(spec, ensure_ascii=False, indent=2),
+                mcp_references=""  # MCP工具通过AI服务自动加载
+            )
         
         logger.info(f"🔧 角色详情生成: enable_mcp={enable_mcp}")
         
@@ -383,10 +398,21 @@ class AutoCharacterService:
         
         for outline_item in outline_data_list:
             if isinstance(outline_item, dict):
-                characters = outline_item.get("characters", [])
                 summary = outline_item.get("summary", "") or outline_item.get("content", "")
                 title = outline_item.get("title", "")
-                
+
+                # 播客模式：提取 historical_figure 字段（单个字符串）
+                historical_figure = outline_item.get("historical_figure", "")
+                if historical_figure and historical_figure.strip():
+                    name = historical_figure.strip()
+                    all_character_names.add(name)
+                    if name not in character_context:
+                        character_context[name] = []
+                    character_context[name].append(f"《{title}》: {summary[:200]}")
+
+                # 小说模式：提取 characters 数组
+                characters = outline_item.get("characters", [])
+
                 if isinstance(characters, list):
                     for char_entry in characters:
                         # 新格式：{"name": "xxx", "type": "character"/"organization"}

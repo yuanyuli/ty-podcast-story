@@ -2589,27 +2589,63 @@ class PromptService:
 
     # 播客剧集大纲
     PODCAST_OUTLINE = """<system>
-你是儿童广播剧的编剧，擅长将历史故事改编为有趣的穿越冒险剧集。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲历史知识。
+你是儿童广播剧的编剧兼历史顾问，擅长将真实历史故事改编为有趣的穿越冒险剧集。你严格遵循历史事实和封神演义原著设定，绝不会编造不存在的历史人物或偏离世界观。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲历史知识。
 </system>
 
 <task>
-为《{project_title}》设计剧集大纲。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲故事。
-主角：{main_characters}
-历史时期：{historical_period}
+为《{project_title}》设计{chapter_count}集剧集大纲。每集5-8分钟，用"小朋友穿越到历史现场"的方式讲故事。
+必须精确生成{chapter_count}集，不多不少。
 </task>
 
+<input>
+【项目信息】
+书名：{project_title}
+主题：{theme}
+历史时期：{historical_period}
+
+【世界观设定】
+地点：{location}
+氛围：{atmosphere}
+世界规则：{world_rules}
+BGM风格：{bgm_style}
+
+【主角团】
+{main_characters}
+
+【核心要求】
+1. 所有出场历史人物必须来自封神演义或商朝末年真实历史
+2. 主角团成员固定为已注册角色（见上方列表），禁止新增常驻成员
+3. 每集只增加1个历史嘉宾角色（historical_figure 字段）
+</input>
+
 <guidelines>
-1. 每集必须有一个清晰的历史知识点
-2. 必须有一个穿越的趣味场景（比如掉进古代厨房/集市/战场）
-3. 必须有一个角色互动亮点（和历史人物的对话）
-4. 结尾必须有悬念钩子
-5. 预估时长5-8分钟（约1500-2500字）
+1. 每集必须有一个清晰的历史知识点（knowledge_point：用一句话讲清一个历史概念）
+2. 每集必须有穿越的趣味场景（character_focus：具体到某角色在历史场景中的体验）
+3. 每集必须有角色互动亮点（和历史人物的对话碰撞）
+4. 每集结尾必须有悬念钩子（cliffhanger：和下一集的历史人物/事件相关）
+5. 情感曲线要有起伏（emotion：如"好奇→惊讶→恍然大悟"）
+6. 预估时长5-8分钟（约1500-2500字）
+7. 首集用于建立世界观、介绍主角团、展开第一次穿越
+8. 后续剧集逐步深化历史知识、发展角色关系
 </guidelines>
 
 <output>
-按以下 JSON 格式输出剧集列表：
-[{{"episode_number": 1, "title": "...", "historical_period": "...", "historical_figure": "...", "knowledge_point": "...", "character_focus": "...", "emotion": "...", "cliffhanger": "...", "bgm_style": "...", "estimated_duration": "6分钟"}}]
-</output>"""
+按以下 JSON 格式输出剧集列表（精确{chapter_count}个对象）：
+[{{"episode_number": 1, "title": "剧集标题（有趣吸引小朋友）", "historical_period": "本集涉及的朝代和时期", "historical_figure": "本集出场的历史人物名字（必须来自封神演义或商朝真实历史）", "knowledge_point": "本集核心知识点（一句话）", "character_focus": "主角团角色在本集的亮点", "scenes": ["场景1描述", "场景2描述", "场景3描述", "场景4描述"], "emotion": "情感曲线", "cliffhanger": "结尾悬念钩子（引出下一集）", "bgm_style": "本集BGM风格建议", "estimated_duration": "预估时长"}}]
+</output>
+
+<constraints>
+✅ 精确生成{chapter_count}集，JSON数组长度必须等于{chapter_count}
+✅ historical_figure 必须是封神演义或商朝真实历史人物，禁止编造
+✅ 每集角色只能使用已注册主角团 + 本集 historical_figure
+✅ knowledge_point 必须准确反映真实历史知识
+✅ scenes 每集至少3个场景
+❌ 禁止创造主角团之外的新常驻原创角色
+❌ 禁止将后世人物放入商朝时期
+❌ 禁止 historical_figure 字段为空或填写模糊描述
+❌ 禁止脱离{historical_period}的历史背景
+❌ 禁止角色OOC（偏离其注册性格设定）
+</constraints>"""
 
     # 播客第1集内容生成
     PODCAST_EPISODE_FIRST = """<system>

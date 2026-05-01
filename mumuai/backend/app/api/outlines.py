@@ -1731,8 +1731,14 @@ async def podcast_outline_generator(
         prompt = PromptService.format_prompt(
             template,
             project_title=project.title,
-            main_characters=characters_info or "冯奇奇、五花、布皮冻、白木苏、肥笼",
-            historical_period=project.world_time_period or "商朝末年"
+            chapter_count=chapter_count,
+            theme=project.theme or "历史穿越冒险",
+            historical_period=project.world_time_period or "商朝末年",
+            location=project.world_location or "朝歌城",
+            atmosphere=project.world_atmosphere or "神秘奇幻",
+            world_rules=project.world_rules or "穿越者不能改变历史重大事件",
+            bgm_style="古筝+编钟为主，节奏舒缓，带有神秘感和童趣",
+            main_characters=characters_info or "冯奇奇、五花、布皮冻、白木苏、肥笼"
         )
         logger.info(f"播客大纲生成: project={project.title}")
 

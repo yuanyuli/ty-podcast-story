@@ -2649,7 +2649,7 @@ BGM风格：{bgm_style}
 
     # 播客第1集内容生成
     PODCAST_EPISODE_FIRST = """<system>
-你是儿童广播剧的剧本作家，使用"旁白叙述+角色对话"的广播剧格式创作内容。你的作品将在喜马拉雅等平台播放，听众是3-10岁的小朋友和他们的家长。
+你是儿童广播剧的剧本作家，使用"旁白叙述+角色对话"的广播剧格式创作内容。你的作品将在喜马拉雅等平台播放，听众是3-10岁的小朋友和他们的家长。你善于把历史知识自然地融入角色对话中，让小朋友在故事里学到知识，而不是被说教。
 </system>
 
 <task>
@@ -2664,6 +2664,8 @@ BGM风格：{bgm_style}
 角色聚焦：{character_focus}
 情感基调：{emotion}
 目标字数：{target_word_count}字（对应{estimated_duration}时长）
+BGM风格：{bgm_style}
+环境音效参考：{sound_effects}
 
 主角团：
 {characters_info}
@@ -2680,9 +2682,10 @@ BGM风格：{bgm_style}
 5. 布皮冻：说话像果冻一样Q弹，喜欢说"你猜怎么着"
 6. 白木苏：温和有耐心，像讲故事的大哥哥
 7. 肥笼：用"喵呜"和动作参与剧情
-8. 历史人物说话要符合身份但有反差萌
+8. 历史人物说话要符合身份但有反差萌（比如姜子牙可以很幽默但很智慧）
 9. 旁白语言要温暖有画面感，像睡前故事
-10. 结尾设置悬念："小朋友们，想知道后面发生了什么吗？闭上眼睛，我们明天继续..."
+10. 知识点通过角色对话和情节自然带出，不直接念百科、不说"小朋友们请注意这是知识点"
+11. 结尾设置悬念，为下一集做铺垫
 </guidelines>
 
 <constraints>
@@ -2690,12 +2693,14 @@ BGM风格：{bgm_style}
 - 每段对话不超过50字（小朋友注意力）
 - 必须有至少2个角色之间的互动对话
 - 必须有一个让小朋友笑出声的桥段
+- 知识点必须自然融入剧情，禁止生硬说教
+- 禁止角色OOC（偏离其注册性格设定）
 </constraints>
 
 <output>
 请直接按以下格式输出广播剧内容：
 
-【旁白】（历史场景描述，温暖有画面感）
+【旁白】（历史场景描述，温暖有画面感，融入{bgm_style}的氛围感）
 【角色名1】（对话内容，动作描述用括号）
 【角色名2】（对话内容）
 【旁白】（转场叙述）
@@ -2708,29 +2713,64 @@ BGM风格：{bgm_style}
         "这是第{episode_number}集，需要承接上一集的悬念（{prev_cliffhanger}），继续展开冒险。"
     )
 
-    # 播客角色设计
+    # 播客角色设计（支持批量生成）
     PODCAST_CHARACTER = """<system>
-你是儿童广播剧的角色设计师，擅长为有声故事设计声音辨识度极高的角色。
+你是儿童广播剧的选角导演，精通历史又懂声音设计。你为广播剧设计声音辨识度极高、性格鲜明的角色。你严格区分主角团常驻成员和历史嘉宾角色，不会混淆或编造角色。
 </system>
 
 <task>
-为广播剧《{project_title}》设计角色的详细设定，特别注重声音特征和口头禅。
+为广播剧《{project_title}》设计{count}个角色的详细设定，特别注重声音特征和口头禅。角色类型为：{character_type}。
 </task>
+
+<input>
+【项目背景】
+历史时期：{historical_period}
+场景地点：{location}
+氛围基调：{atmosphere}
+
+【已注册角色（请勿重复）】
+{existing_characters}
+
+【主角团性格锚点（如涉及请严格遵守）】
+- 冯奇奇：捣蛋鬼，好奇心爆棚，心思细腻，总问"为什么"
+- 五花：小吃货，名字谐音五花肉，三句不离吃但关键时刻靠谱
+- 布皮冻：Q弹捣蛋鬼，外表皮内心软，喜欢说"你猜怎么着"
+- 白木苏：温和大哥哥，团队的保姆和智囊，负责救场和历史讲解
+- 肥笼：贪吃宠物猫，行动矫健，用"喵呜"表达情绪
+</input>
 
 <guidelines>
 1. 每个角色需要独特的说话方式和声音标签
-2. 口头禅要简单好记，小朋友能记住
-3. 声音描述要具体："清脆像铃铛"而不是"好听"
+2. 口头禅要简单好记，小朋友能记住（3-6个字最佳）
+3. 声音描述要具体：用"清脆像铃铛"而不是"好听"
+4. 如果是历史人物，要符合封神演义原著设定，但增加反差萌
+5. 主角团角色严格按上方性格锚点设计，不可偏离
+6. speaking_pattern 描述说话节奏、常用语气词、语速特点
 </guidelines>
 
 <output>
-请输出 JSON 格式：
-{{"name": "...", "age": "...", "gender": "...", "personality": "...", "voice_style": "清脆/稚嫩/低沉/欢快等", "speaking_pattern": "说话节奏和习惯", "catchphrase": "口头禅"}}
-</output>"""
+请输出 JSON 数组格式（{count}个对象）：
+[{{"name": "角色名（中文，2-4字）", "age": "年龄或年龄段", "gender": "男/女", "personality": "性格描述（50-100字）", "voice_style": "声音质感（如清脆稚嫩/低沉威严/欢快跳跃）", "speaking_pattern": "说话节奏和习惯（如语速快/慢/喜欢拖长音/常带语气词）", "catchphrase": "口头禅（3-6字，适合儿童记忆）"}}]
+</output>
 
-    # 播客重新生成（基于第1集模板替换创作指令）
+<constraints>
+✅ 名字必须是中文，2-4字，符合角色背景和时代
+✅ 生成数量精确为{count}个
+✅ 历史人物名字必须来自封神演义或{historical_period}真实历史
+✅ 所有角色名必须在已注册角色列表中不存在
+❌ 禁止编造不在封神演义或{historical_period}历史中的角色名
+❌ 禁止使用现代名字或外国名字
+❌ 禁止口头禅中出现不适合儿童的内容
+❌ 禁止与已注册角色重名
+</constraints>"""
+
+    # 播客重新生成（基于第1集模板替换创作指令并注入反馈）
     PODCAST_REGENERATE = PODCAST_EPISODE_FIRST.replace(
-        "请创作", "根据以下反馈重新创作"
+        "请创作《{project_title}》的第{episode_number}集：{episode_title}。",
+        "根据以下反馈重新创作《{project_title}》的第{episode_number}集：{episode_title}。"
+    ).replace(
+        "这是该系列的第一集，需要建立世界观、介绍主角团、展开第一次穿越冒险。",
+        "这是该系列的第{episode_number}集。修改要求：{feedback}"
     )
 
     @staticmethod
@@ -3233,6 +3273,42 @@ BGM风格：{bgm_style}
                 "category": "灵感模式",
                 "description": "根据用户提供的部分信息智能补全完整的小说方案",
                 "parameters": ["existing"]
+            },
+            "PODCAST_WORLD": {
+                "name": "播客世界观",
+                "category": "播客模式",
+                "description": "为儿童广播剧设计世界观设定、声音氛围和BGM风格",
+                "parameters": ["project_title", "target_age", "historical_period", "theme"]
+            },
+            "PODCAST_OUTLINE": {
+                "name": "播客剧集大纲",
+                "category": "播客模式",
+                "description": "将历史故事改编为广播剧剧集大纲，每集5-8分钟",
+                "parameters": ["project_title", "theme", "chapter_count", "historical_period", "location", "atmosphere", "world_rules", "bgm_style", "main_characters"]
+            },
+            "PODCAST_EPISODE_FIRST": {
+                "name": "播客第1集",
+                "category": "播客模式",
+                "description": "生成广播剧第1集完整内容（含开场和角色引入）",
+                "parameters": ["project_title", "episode_number", "episode_title", "historical_period", "historical_figure", "knowledge_point", "character_focus", "emotion", "target_word_count", "estimated_duration", "bgm_style", "sound_effects", "characters_info", "scenes"]
+            },
+            "PODCAST_EPISODE_NEXT": {
+                "name": "播客后续集",
+                "category": "播客模式",
+                "description": "生成广播剧后续集内容（承接上集悬念）",
+                "parameters": ["project_title", "episode_number", "episode_title", "historical_period", "historical_figure", "knowledge_point", "character_focus", "emotion", "target_word_count", "estimated_duration", "bgm_style", "sound_effects", "characters_info", "scenes", "prev_cliffhanger"]
+            },
+            "PODCAST_CHARACTER": {
+                "name": "播客角色生成",
+                "category": "播客模式",
+                "description": "为广播剧设计角色（侧重声音特征和口头禅），支持批量生成",
+                "parameters": ["project_title", "count", "character_type", "historical_period", "location", "atmosphere", "existing_characters"]
+            },
+            "PODCAST_REGENERATE": {
+                "name": "播客重生成",
+                "category": "播客模式",
+                "description": "根据反馈重新生成广播剧内容",
+                "parameters": ["project_title", "episode_number", "episode_title", "feedback", "historical_period", "historical_figure", "knowledge_point", "character_focus", "emotion", "target_word_count", "estimated_duration", "bgm_style", "sound_effects", "characters_info", "scenes"]
             }
         }
         

@@ -1338,23 +1338,44 @@ async def outline_generator(
         outline_requirements += "5. 不要在JSON字符串值中使用中文引号（""''），请使用【】或《》标记\n"
         
         # 获取自定义提示词模板
-        template = await PromptService.get_template("OUTLINE_CREATE", user_id, db)
-        outline_prompt = PromptService.format_prompt(
-            template,
-            title=project.title,
-            theme=project.theme or "未设定",
-            genre=project.genre or "通用",
-            chapter_count=outline_count,
-            narrative_perspective=narrative_perspective,
-            target_words=target_words // 10,  # 开局约占总字数的1/10
-            time_period=project.world_time_period or "未设定",
-            location=project.world_location or "未设定",
-            atmosphere=project.world_atmosphere or "未设定",
-            rules=project.world_rules or "未设定",
-            characters_info=characters_info or "暂无角色信息",
-            mcp_references="",
-            requirements=outline_requirements
-        )
+        if project.content_mode == "podcast":
+            world_location = project.world_location or "商朝·朝歌城"
+            world_atmosphere = project.world_atmosphere or "神秘悠远、充满历史厚重感"
+            world_rules = project.world_rules or "穿越到封神演义世界，历史事件和神话交织"
+            theme = project.theme or f"{project.title}的穿越冒险"
+            bgm_style = "古筝+编钟，舒缓明快，童趣神秘"
+
+            template = await PromptService.get_template("PODCAST_OUTLINE", user_id, db)
+            outline_prompt = PromptService.format_prompt(
+                template,
+                project_title=project.title,
+                theme=theme,
+                chapter_count=outline_count,
+                historical_period=project.world_time_period or "商朝末年",
+                location=world_location,
+                atmosphere=world_atmosphere,
+                world_rules=world_rules,
+                bgm_style=bgm_style,
+                main_characters=characters_info or "冯奇奇（捣蛋好奇男主角）、五花（吃货女孩）、布皮冻（Q弹调皮男孩）、白木苏（温和保姆大哥哥）、肥笼（贪吃宠物猫）",
+            )
+        else:
+            template = await PromptService.get_template("OUTLINE_CREATE", user_id, db)
+            outline_prompt = PromptService.format_prompt(
+                template,
+                title=project.title,
+                theme=project.theme or "未设定",
+                genre=project.genre or "通用",
+                chapter_count=outline_count,
+                narrative_perspective=narrative_perspective,
+                target_words=target_words // 10,
+                time_period=project.world_time_period or "未设定",
+                location=project.world_location or "未设定",
+                atmosphere=project.world_atmosphere or "未设定",
+                rules=project.world_rules or "未设定",
+                characters_info=characters_info or "暂无角色信息",
+                mcp_references="",
+                requirements=outline_requirements
+            )
         
         # 流式生成大纲
         estimated_total = 1000

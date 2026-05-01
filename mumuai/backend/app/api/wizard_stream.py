@@ -71,6 +71,7 @@ async def world_building_generator(
                 project_title=title,
                 target_age=data.get("target_age", "3-10岁"),
                 historical_period=data.get("historical_period", "商朝末年"),
+                theme=theme,
             )
         else:
             template = await PromptService.get_template("WORLD_BUILDING", user_id, db)
@@ -224,6 +225,7 @@ async def world_building_generator(
             chapter_count=chapter_count,
             character_count=character_count,
             outline_mode=outline_mode,  # 设置大纲模式
+            content_mode=content_mode,  # 设置内容模式
             wizard_status="incomplete",
             wizard_step=1,
             status="planning"

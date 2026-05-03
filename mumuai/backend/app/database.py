@@ -24,6 +24,10 @@ from app.models import (
     RegenerationTask, Career, CharacterCareer, User, MCPPlugin, PromptTemplate
 )
 
+# 播客模式模型 — 单独导入避免与 __init__.py 循环依赖
+from app.models.audio_task import AudioTask
+from app.models.audio_file import AudioFile
+
 # 引擎缓存：每个用户一个引擎
 _engine_cache: Dict[str, Any] = {}
 

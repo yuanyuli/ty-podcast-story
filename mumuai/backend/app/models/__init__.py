@@ -18,8 +18,6 @@ from app.models.career import Career, CharacterCareer
 from app.models.prompt_template import PromptTemplate
 from app.models.foreshadow import Foreshadow
 from app.models.prompt_workshop import PromptWorkshopItem, PromptSubmission, PromptWorkshopLike
-from app.models.audio_task import AudioTask
-from app.models.audio_file import AudioFile
 
 __all__ = [
     "Project",
@@ -49,6 +47,4 @@ __all__ = [
     "PromptWorkshopItem",
     "PromptSubmission",
     "PromptWorkshopLike",
-    "AudioTask",
-    "AudioFile",
 ]

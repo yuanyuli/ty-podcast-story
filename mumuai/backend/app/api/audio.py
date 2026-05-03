@@ -19,7 +19,7 @@ from app.schemas.audio import (
 )
 from app.logger import get_logger
 
-router = APIRouter(prefix="/api", tags=["音频"])
+router = APIRouter(tags=["音频"])
 logger = get_logger(__name__)
 
 
